@@ -16,25 +16,63 @@
 
 ## Notice
 
-该仓库属于 vibe coding 产物，未经严格测试，使用存在风险，请自行评估。
+该仓库由 AI Vibe Coding 生成和维护，属于实验性质产物，未经严格测试，不保证正确性、稳定性或兼容性，使用风险自担。
 
 ## 依赖
 
-- Go `1.24+`
+- Go `1.24.0`
+- `make`
+- `git`
+
+## Ubuntu 安装
+
+如果你在 Ubuntu 上从零开始，先装基础工具：
+
+```bash
+sudo apt update
+sudo apt install -y make git ca-certificates curl
+```
+
+然后安装 Go `1.24.0`。如果系统里已经有旧版 Go，建议先确认当前版本：
+
+```bash
+go version
+```
+
+如果不是 `go1.24.0`，可以直接用官方压缩包安装到 `/usr/local`：
+
+```bash
+cd /tmp
+curl -LO https://go.dev/dl/go1.24.0.linux-amd64.tar.gz
+sudo rm -rf /usr/local/go
+sudo tar -C /usr/local -xzf go1.24.0.linux-amd64.tar.gz
+echo 'export PATH=/usr/local/go/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+go version
+```
+
+如果是 ARM64 机器，把文件名换成 `go1.24.0.linux-arm64.tar.gz`。
 
 ## 编译
 
-先拉依赖：
+先拉依赖并整理模块：
 
 ```bash
 cd ip-check-go
 go mod tidy
 ```
 
-最方便的是直接一次性编译全部命令：
+然后直接编译全部命令：
 
 ```bash
 cd ip-check-go
+make build
+```
+
+如果你只想看 Make 的最小流程，可以按这个顺序执行：
+
+```bash
+make tidy
 make build
 ```
 
@@ -136,12 +174,6 @@ GEO 数据库默认也放在同目录：
 ./bin/ip-check-cfg
 ./bin/igeo-cfg
 ```
-
-## 说明
-
-- HTTPS 检测与测速采用“连接目标 IP，但保留 URL Host 和 SNI”的方式实现。
-- 当前 `string` 列表类参数建议重复传入，例如 `-w 1.1 -w 1.2`、`-pl hongkong -pl japan`。
-- 单线程测速保持与原 Python 版本接近，逐个 IP 顺序测速。
 
 ## License
 

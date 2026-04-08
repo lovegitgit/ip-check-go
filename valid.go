@@ -127,7 +127,16 @@ func validSingle(ctx context.Context, info IPInfo, cfg Config) (IPInfo, bool) {
 			return info, false
 		}
 		defer fileResp.Body.Close()
-		if fileResp.StatusCode != http.StatusOK || fileResp.Header.Get("Content-Length") == "" {
+		if fileResp.StatusCode != http.StatusOK {
+			if cfg.Valid.PrintErr {
+				consolePrint(fmt.Sprintf("valid file_url test for %s got status %d from %s", info.simpleInfo(), fileResp.StatusCode, cfg.Valid.FileURL))
+			}
+			return info, false
+		}
+		if fileResp.Header.Get("Content-Length") == "" {
+			if cfg.Valid.PrintErr {
+				consolePrint(fmt.Sprintf("valid file_url test for %s got invalid Content-Length: %q from %s", info.simpleInfo(), fileResp.Header.Get("Content-Length"), cfg.Valid.FileURL))
+			}
 			return info, false
 		}
 	}

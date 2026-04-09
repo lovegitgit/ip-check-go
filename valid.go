@@ -1,12 +1,10 @@
 package ipcheck
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 )
 
@@ -41,7 +39,11 @@ func runValidTest(ctx context.Context, infos []IPInfo, cfg Config, ctrl *signalC
 			defer wg.Done()
 			for info := range jobs {
 				fixed, ok := validSingle(ctx, info, cfg)
-				results <- result{info: fixed, ok: ok}
+				select {
+				case <-ctx.Done():
+					return
+				case results <- result{info: fixed, ok: ok}:
+				}
 			}
 		}()
 	}
@@ -100,24 +102,22 @@ func validSingle(ctx context.Context, info IPInfo, cfg Config) (IPInfo, bool) {
 	if err != nil {
 		return info, false
 	}
+	if ctx.Err() != nil {
+		return info, false
+	}
 	if cfg.Valid.Path == "/cdn-cgi/trace" {
-		values := map[string]string{}
-		scanner := bufio.NewScanner(bytes.NewReader(body))
-		for scanner.Scan() {
-			line := scanner.Text()
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				values[parts[0]] = parts[1]
-			}
-		}
-		if values[cfg.Valid.CheckKey] != cfg.Valid.HostName {
+		ok, loc, colo := parseTraceBody(body, cfg.Valid.CheckKey, cfg.Valid.HostName)
+		if !ok {
 			return info, false
 		}
-		info.Loc = values["loc"]
-		info.Colo = values["colo"]
+		info.Loc = loc
+		info.Colo = colo
 	}
 
 	if cfg.Valid.FileCheck && cfg.Valid.FileURL != "" {
+		if ctx.Err() != nil {
+			return info, false
+		}
 		fileHost, _, err := parseURLParts(cfg.Valid.FileURL)
 		if err != nil {
 			return info, false
@@ -147,4 +147,40 @@ func validSingle(ctx context.Context, info IPInfo, cfg Config) (IPInfo, bool) {
 		}
 	}
 	return info, true
+}
+
+func parseTraceBody(body []byte, checkKey, hostName string) (ok bool, loc string, colo string) {
+	checkKeyBytes := []byte(checkKey)
+	hostNameBytes := []byte(hostName)
+	locKey := []byte("loc")
+	coloKey := []byte("colo")
+	for len(body) > 0 {
+		line := body
+		if idx := bytes.IndexByte(body, '\n'); idx >= 0 {
+			line = body[:idx]
+			body = body[idx+1:]
+		} else {
+			body = nil
+		}
+		line = bytes.TrimSpace(bytes.TrimSuffix(line, []byte{'\r'}))
+		if len(line) == 0 {
+			continue
+		}
+		key, value, found := bytes.Cut(line, []byte("="))
+		if !found {
+			continue
+		}
+		switch {
+		case bytes.Equal(key, checkKeyBytes):
+			if !bytes.Equal(value, hostNameBytes) {
+				return false, "", ""
+			}
+			ok = true
+		case bytes.Equal(key, locKey):
+			loc = string(value)
+		case bytes.Equal(key, coloKey):
+			colo = string(value)
+		}
+	}
+	return ok, loc, colo
 }

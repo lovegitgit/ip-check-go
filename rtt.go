@@ -35,7 +35,11 @@ func runRTTTest(ctx context.Context, infos []IPInfo, cfg Config, ctrl *signalCon
 		go func() {
 			defer wg.Done()
 			for info := range jobs {
-				results <- result{info: tcpPing(ctx, info, cfg)}
+				select {
+				case <-ctx.Done():
+					return
+				case results <- result{info: tcpPing(ctx, info, cfg)}:
+				}
 			}
 		}()
 	}
@@ -84,12 +88,40 @@ func tcpPing(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 	)
 	addr := net.JoinHostPort(info.IP, fmt.Sprint(info.Port))
 	timeout := durationSeconds(maxFloat(cfg.RTT.Timeout, cfg.RTT.MaxRTT/800))
+	interval := durationSeconds(cfg.RTT.Interval)
+	var timer *time.Timer
+	if interval > 0 {
+		timer = time.NewTimer(interval)
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		defer func() {
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+		}()
+	}
 	for i := 0; i < cfg.RTT.TestCount; i++ {
 		if i > 0 {
-			select {
-			case <-ctx.Done():
-				return info
-			case <-time.After(durationSeconds(cfg.RTT.Interval)):
+			if interval > 0 {
+				timer.Reset(interval)
+				select {
+				case <-ctx.Done():
+					return info
+				case <-timer.C:
+				}
+			} else {
+				select {
+				case <-ctx.Done():
+					return info
+				default:
+				}
 			}
 		}
 		start := time.Now()

@@ -2,6 +2,7 @@ package ipcheck
 
 import (
 	"context"
+	mrand "math/rand"
 	"net/http"
 	"time"
 )
@@ -14,6 +15,7 @@ func retryRequest(ctx context.Context, maxRetry int, backoff float64, fn func() 
 		resp *http.Response
 		err  error
 	)
+	rnd := mrand.New(mrand.NewSource(time.Now().UnixNano()))
 	attempts := maxRetry + 1
 	if attempts < 1 {
 		attempts = 1
@@ -32,10 +34,25 @@ func retryRequest(ctx context.Context, maxRetry int, backoff float64, fn func() 
 		// Match ip-check2 behavior: retry wait time only follows local
 		// backoff_factor and never any server response header.
 		sleep := time.Duration(float64(time.Second) * backoff * float64(i+1))
+		if backoff > 0 {
+			jitterMax := time.Duration(float64(time.Second) * backoff / 2)
+			if jitterMax < time.Nanosecond {
+				jitterMax = time.Nanosecond
+			}
+			jitter := time.Duration(rnd.Int63n(int64(jitterMax)))
+			sleep += jitter
+		}
+		timer := time.NewTimer(sleep)
 		select {
 		case <-ctx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
 			return nil, ctx.Err()
-		case <-time.After(sleep):
+		case <-timer.C:
 		}
 	}
 	return nil, err

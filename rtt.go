@@ -3,16 +3,20 @@ package ipcheck
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"sort"
 	"sync"
 	"time"
 )
 
-func runRTTTest(ctx context.Context, infos []IPInfo, cfg Config) []IPInfo {
+func runRTTTest(ctx context.Context, infos []IPInfo, cfg Config, ctrl *signalController) []IPInfo {
 	if !cfg.RTT.Enabled {
 		consolePrint("跳过RTT测试")
 		return infos
+	}
+	if ctrl != nil {
+		ctrl.clearCache()
 	}
 	consolePrint("准备测试rtt ... ...")
 	consolePrint(fmt.Sprintf("rtt ping 间隔为: %v秒", cfg.RTT.Interval))
@@ -60,6 +64,9 @@ func runRTTTest(ctx context.Context, infos []IPInfo, cfg Config) []IPInfo {
 			if res.info.RTT <= cfg.RTT.MaxRTT && res.info.Loss <= cfg.RTT.MaxLoss {
 				passed = append(passed, res.info)
 				passCount++
+				if ctrl != nil {
+					ctrl.cache(res.info)
+				}
 			}
 		}
 		consoleRefresh("  当前进度为: %d/%d, %d pass", testCount, len(infos), passCount)
@@ -71,7 +78,7 @@ func runRTTTest(ctx context.Context, infos []IPInfo, cfg Config) []IPInfo {
 
 func tcpPing(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 	var (
-		rtts        []float64
+		sumRTT      float64
 		packetsSent int
 		packetsLost int
 	)
@@ -94,13 +101,13 @@ func tcpPing(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 			}
 		} else {
 			_ = conn.Close()
-			elapsed := time.Since(start)
-			rtts = append(rtts, float64(elapsed.Microseconds())/1000)
+			elapsed := float64(time.Since(start)) / float64(time.Millisecond)
+			sumRTT += elapsed
 			packetsSent++
 		}
 		if cfg.RTT.FastCheck && packetsSent > 0 {
 			loss := float64(packetsLost) * 100 / float64(cfg.RTT.TestCount)
-			avg := sumFloat(rtts) / float64(packetsSent)
+			avg := sumRTT / float64(packetsSent)
 			if loss > cfg.RTT.MaxLoss || avg > cfg.RTT.MaxRTT {
 				return info
 			}
@@ -109,21 +116,13 @@ func tcpPing(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 	if packetsSent == 0 {
 		return info
 	}
-	info.RTT = round2(sumFloat(rtts) / float64(packetsSent))
+	info.RTT = round2(sumRTT / float64(packetsSent))
 	info.Loss = round2(float64(packetsLost) * 100 / float64(cfg.RTT.TestCount))
 	return info
 }
 
-func sumFloat(items []float64) float64 {
-	var total float64
-	for _, item := range items {
-		total += item
-	}
-	return total
-}
-
 func round2(v float64) float64 {
-	return float64(int(v*100+0.5)) / 100
+	return math.Round(v*100) / 100
 }
 
 func maxFloat(a, b float64) float64 {

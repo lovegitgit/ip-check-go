@@ -9,10 +9,13 @@ import (
 	"time"
 )
 
-func runSpeedTest(ctx context.Context, infos []IPInfo, cfg Config) []IPInfo {
+func runSpeedTest(ctx context.Context, infos []IPInfo, cfg Config, ctrl *signalController) []IPInfo {
 	if !cfg.Speed.Enabled {
 		consolePrint("跳过速度测试")
 		return infos
+	}
+	if ctrl != nil {
+		ctrl.clearCache()
 	}
 	consolePrint("准备测试下载速度 ... ...")
 	consolePrint(fmt.Sprintf("是否使用user-agent: %v", cfg.Speed.UserAgent))
@@ -23,14 +26,23 @@ func runSpeedTest(ctx context.Context, infos []IPInfo, cfg Config) []IPInfo {
 	consolePrint(fmt.Sprintf("正在测试ip 下载速度, 总数为%d", len(infos)))
 	var passed []IPInfo
 	for idx, info := range infos {
+		if ctx.Err() != nil {
+			break
+		}
 		consolePrint(fmt.Sprintf("正在测速第%d/%d个ip: %s:%d %s_%s rtt %.2f ms", idx+1, len(infos), info.ipString(), info.Port, info.Loc, info.Colo, info.RTT))
 		fixed := speedSingle(ctx, info, cfg)
+		if ctrl != nil {
+			ctrl.cache(fixed)
+		}
 		consolePrint(fixed.infoString())
 		if fixed.MaxSpeed >= cfg.Speed.DownloadSpeed && fixed.AvgSpeed >= cfg.Speed.AvgDownloadSpeed {
 			passed = append(passed, fixed)
 			if cfg.Speed.BetterIPLimit > 0 && len(passed) >= cfg.Speed.BetterIPLimit {
 				break
 			}
+		}
+		if ctx.Err() != nil {
+			break
 		}
 	}
 	return passed

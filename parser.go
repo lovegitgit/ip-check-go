@@ -139,7 +139,7 @@ func resolveHostnames(ctx context.Context, hosts []string, cfg Config) ([]IPInfo
 	if len(hosts) == 0 {
 		return nil, nil
 	}
-	workerCount := minInt(max(1, cfg.Valid.ThreadNum), len(hosts))
+	workerCount := minInt(max(1, cfg.Runtime.ResolveThreadNum), len(hosts))
 	jobs := make(chan string)
 	var wg sync.WaitGroup
 	var mu sync.Mutex

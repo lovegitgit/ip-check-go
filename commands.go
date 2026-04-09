@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var errUsage = errors.New("usage")
+var ErrUsage = errors.New("usage")
 
 func RunIPCheck(ctx context.Context, args []string) error {
 	paths := newAppPaths()
@@ -63,6 +63,7 @@ func RunIPCheck(ctx context.Context, args []string) error {
 		onlyV4 bool
 		onlyV6 bool
 		crSize int
+		resolveThreadNum int
 		disableFileCheck bool
 		pureMode bool
 		showVersion bool
@@ -127,11 +128,13 @@ func RunIPCheck(ctx context.Context, args []string) error {
 	fs.BoolVar(&disableFileCheck, "df", false, "是否禁用可用性检测文件可用性")
 	fs.BoolVar(&disableFileCheck, "disable_file_check", false, "是否禁用可用性检测文件可用性")
 	fs.BoolVar(&pureMode, "pure_mode", false, "纯净模式, 不使用geo数据库进行ip信息补全")
+	fs.IntVar(&resolveThreadNum, "rs", 0, "域名解析线程数")
+	fs.IntVar(&resolveThreadNum, "resolve_thread_num", 0, "域名解析线程数")
 	fs.BoolVar(&showVersion, "version", false, "显示版本信息")
 	normalizedArgs := normalizeArgs(args, ipCheckArgSpec())
 	if err := fs.Parse(normalizedArgs); err != nil {
 		printIPCheckUsage()
-		return errUsage
+		return ErrUsage
 	}
 	if showVersion {
 		consolePrint(fmt.Sprintf("ip-check version %s installed in %s", version, paths.baseDir))
@@ -139,7 +142,7 @@ func RunIPCheck(ctx context.Context, args []string) error {
 	}
 	if fs.NArg() == 0 {
 		printIPCheckUsage()
-		return errUsage
+		return ErrUsage
 	}
 
 	configPath, err := ensureIPCheckConfig(paths, configPath)
@@ -237,6 +240,9 @@ func RunIPCheck(ctx context.Context, args []string) error {
 	if crSize > 0 {
 		cfg.CIDRSampleIPNum = crSize
 	}
+	if resolveThreadNum > 0 {
+		cfg.Runtime.ResolveThreadNum = resolveThreadNum
+	}
 	if testURL != "" {
 		hostName, path, err := parseURLParts(testURL)
 		if err != nil {
@@ -283,6 +289,7 @@ func RunIPCheck(ctx context.Context, args []string) error {
 	consolePrint(fmt.Sprintf("优选ip 文件为: %s", cfg.Runtime.OutputFile))
 	consolePrint(fmt.Sprintf("是否忽略保存测速结果到文件: %s", pyBool(cfg.NoSave || cfg.Runtime.DryRun)))
 	consolePrint(fmt.Sprintf("cidr 抽样ip 个数为: %d", cfg.CIDRSampleIPNum))
+	consolePrint(fmt.Sprintf("域名解析线程数为: %d", cfg.Runtime.ResolveThreadNum))
 
 	geoSvc, err := openGeoService(paths)
 	if err != nil {
@@ -317,7 +324,10 @@ func RunIPCheck(ctx context.Context, args []string) error {
 
 	validCtx, validCancel := context.WithCancel(ctx)
 	sigCtrl.setStage(stageValid, validCancel)
-	passed := runValidTest(validCtx, infos, cfg)
+	passed := runValidTest(validCtx, infos, cfg, sigCtrl)
+	if validCtx.Err() != nil {
+		sigCtrl.printCache()
+	}
 	sigCtrl.clearStage()
 	validCancel()
 	if len(passed) == 0 {
@@ -326,7 +336,10 @@ func RunIPCheck(ctx context.Context, args []string) error {
 	}
 	rttCtx, rttCancel := context.WithCancel(ctx)
 	sigCtrl.setStage(stageRTT, rttCancel)
-	passed = runRTTTest(rttCtx, passed, cfg)
+	passed = runRTTTest(rttCtx, passed, cfg, sigCtrl)
+	if rttCtx.Err() != nil {
+		sigCtrl.printCache()
+	}
 	sigCtrl.clearStage()
 	rttCancel()
 	if len(passed) == 0 {
@@ -335,7 +348,10 @@ func RunIPCheck(ctx context.Context, args []string) error {
 	}
 	speedCtx, speedCancel := context.WithCancel(ctx)
 	sigCtrl.setStage(stageSpeed, speedCancel)
-	passed = runSpeedTest(speedCtx, passed, cfg)
+	passed = runSpeedTest(speedCtx, passed, cfg, sigCtrl)
+	if speedCtx.Err() != nil {
+		sigCtrl.printCache()
+	}
 	sigCtrl.clearStage()
 	speedCancel()
 	sigCtrl.finish()
@@ -370,7 +386,7 @@ func RunIPCheckCfg(args []string) error {
 	example := fs.Bool("e", false, "")
 	fs.BoolVar(example, "example", false, "显示配置文件示例")
 	if err := fs.Parse(normalizeArgs(args, cfgArgSpec())); err != nil {
-		return errUsage
+		return ErrUsage
 	}
 	if *example {
 		fmt.Print(defaultIPCheckConfig)
@@ -394,10 +410,10 @@ func RunGeoInfo(ctx context.Context, args []string) error {
 		fmt.Fprintln(os.Stdout, "geo-info 获取ip(s) 的归属地信息")
 	}
 	if err := fs.Parse(normalizeArgs(args, geoInfoArgSpec())); err != nil {
-		return errUsage
+		return ErrUsage
 	}
 	if fs.NArg() == 0 {
-		return errUsage
+		return ErrUsage
 	}
 	cfg := defaultConfig()
 	cfg.Runtime.IPSources = uniqueStrings(fs.Args())
@@ -438,7 +454,7 @@ func RunGeoDownload(ctx context.Context, args []string) error {
 	autoYes := fs.Bool("y", false, "")
 	fs.BoolVar(autoYes, "yes", false, "自动确认更新并下载 GEO 数据库")
 	if err := fs.Parse(normalizeArgs(args, geoDownloadArgSpec())); err != nil {
-		return errUsage
+		return ErrUsage
 	}
 	cfgPath, err := ensureGeoConfig(paths)
 	if err != nil {
@@ -480,7 +496,7 @@ func RunGeoCfg(args []string) error {
 	example := fs.Bool("e", false, "")
 	fs.BoolVar(example, "example", false, "显示配置文件示例")
 	if err := fs.Parse(normalizeArgs(args, geoCfgArgSpec())); err != nil {
-		return errUsage
+		return ErrUsage
 	}
 	if *example {
 		fmt.Print(defaultGeoConfig)
@@ -509,6 +525,7 @@ func RunIPFilter(ctx context.Context, args []string) error {
 	var output string
 	var onlyV4, onlyV6 bool
 	var crSize int
+	var resolveThreadNum int
 	fs.Var(&whiteList, "w", "偏好ip参数, 可重复传入")
 	fs.Var(&whiteList, "white_list", "偏好ip参数, 可重复传入")
 	fs.Var(&blockList, "b", "屏蔽ip参数, 可重复传入")
@@ -525,13 +542,15 @@ func RunIPFilter(ctx context.Context, args []string) error {
 	fs.BoolVar(&onlyV6, "only_v6", false, "仅筛选ipv6")
 	fs.IntVar(&crSize, "cs", 0, "cidr 随机抽样ip数量限制")
 	fs.IntVar(&crSize, "cr_size", 0, "cidr 随机抽样ip数量限制")
+	fs.IntVar(&resolveThreadNum, "rs", 0, "域名解析线程数")
+	fs.IntVar(&resolveThreadNum, "resolve_thread_num", 0, "域名解析线程数")
 	fs.StringVar(&output, "o", "", "输出文件")
 	fs.StringVar(&output, "output", "", "输出文件")
 	if err := fs.Parse(normalizeArgs(args, ipFilterArgSpec())); err != nil {
-		return errUsage
+		return ErrUsage
 	}
 	if fs.NArg() == 0 {
-		return errUsage
+		return ErrUsage
 	}
 	cfg := defaultConfig()
 	cfg.Runtime.IPSources = uniqueStrings(fs.Args())
@@ -570,7 +589,11 @@ func RunIPFilter(ctx context.Context, args []string) error {
 	if crSize > 0 {
 		cfg.CIDRSampleIPNum = crSize
 	}
+	if resolveThreadNum > 0 {
+		cfg.Runtime.ResolveThreadNum = resolveThreadNum
+	}
 	consolePrint("cidr 抽样ip 个数为:", cfg.CIDRSampleIPNum)
+	consolePrint("域名解析线程数为:", cfg.Runtime.ResolveThreadNum)
 	geoSvc, err := openGeoService(paths)
 	if err != nil {
 		return err

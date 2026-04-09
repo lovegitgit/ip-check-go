@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"sort"
 	"sync"
 	"syscall"
 	"time"
@@ -24,6 +25,7 @@ type signalController struct {
 	currentStage    stageName
 	cancelStage     context.CancelFunc
 	lastInterruptAt time.Time
+	cachedIPs       []IPInfo
 }
 
 func newSignalController() *signalController {
@@ -35,6 +37,13 @@ func (s *signalController) setStage(stage stageName, cancel context.CancelFunc) 
 	defer s.mu.Unlock()
 	s.currentStage = stage
 	s.cancelStage = cancel
+	s.cachedIPs = nil
+}
+
+func (s *signalController) clearCache() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cachedIPs = nil
 }
 
 func (s *signalController) clearStage() {
@@ -49,6 +58,36 @@ func (s *signalController) finish() {
 	defer s.mu.Unlock()
 	s.currentStage = stageExit
 	s.cancelStage = nil
+}
+
+func (s *signalController) cache(info IPInfo) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cachedIPs = append(s.cachedIPs, info)
+}
+
+func (s *signalController) printCache() {
+	s.mu.Lock()
+	cached := make([]IPInfo, len(s.cachedIPs))
+	copy(cached, s.cachedIPs)
+	s.mu.Unlock()
+
+	if len(cached) == 0 {
+		return
+	}
+	sort.Slice(cached, func(i, j int) bool {
+		if cached[i].MaxSpeed != cached[j].MaxSpeed {
+			return cached[i].MaxSpeed > cached[j].MaxSpeed
+		}
+		if cached[i].RTT != cached[j].RTT {
+			return cached[i].RTT < cached[j].RTT
+		}
+		return cached[i].CountryCity < cached[j].CountryCity
+	})
+	consolePrint("当前测试阶段IP 信息如下:")
+	for _, info := range cached {
+		consolePrint(info.infoString())
+	}
 }
 
 func (s *signalController) handleInterrupt() {

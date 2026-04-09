@@ -10,10 +10,13 @@ import (
 	"sync"
 )
 
-func runValidTest(ctx context.Context, infos []IPInfo, cfg Config) []IPInfo {
+func runValidTest(ctx context.Context, infos []IPInfo, cfg Config, ctrl *signalController) []IPInfo {
 	if !cfg.Valid.Enabled {
 		consolePrint("跳过可用性测试")
 		return infos
+	}
+	if ctrl != nil {
+		ctrl.clearCache()
 	}
 	consolePrint("准备测试可用性 ... ...")
 	if len(infos) > cfg.Valid.IPLimitCount {
@@ -67,6 +70,9 @@ func runValidTest(ctx context.Context, infos []IPInfo, cfg Config) []IPInfo {
 		if res.ok {
 			passCount++
 			passed = append(passed, res.info)
+			if ctrl != nil {
+				ctrl.cache(res.info)
+			}
 		}
 		consoleRefresh("  当前进度为: %d/%d, %d pass", testCount, len(infos), passCount)
 	}

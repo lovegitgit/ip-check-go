@@ -14,6 +14,9 @@ func main() {
 		if errors.Is(err, context.Canceled) {
 			os.Exit(130)
 		}
+		if errors.Is(err, ipcheck.ErrUsage) {
+			os.Exit(2)
+		}
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

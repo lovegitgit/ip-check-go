@@ -14,6 +14,7 @@ func defaultConfig() Config {
 		IPPort:          443,
 		CIDRSampleIPNum: 16,
 	}
+	cfg.Runtime.ResolveThreadNum = 16
 	cfg.Valid.Enabled = true
 	cfg.Valid.IPLimitCount = 100000
 	cfg.Valid.HostName = "cloudflare.com"
@@ -57,6 +58,7 @@ func loadConfig(path string) (Config, error) {
 	cfg.IPPort = intValue(common, "ip_port", cfg.IPPort)
 	cfg.NoSave = boolValue(common, "no_save", cfg.NoSave)
 	cfg.CIDRSampleIPNum = intValue(common, "cidr_sample_ip_num", cfg.CIDRSampleIPNum)
+	cfg.Runtime.ResolveThreadNum = intValue(common, "resolve_thread_num", cfg.Runtime.ResolveThreadNum)
 
 	valid := sections["valid test"]
 	cfg.Valid.Enabled = boolValue(valid, "enabled", cfg.Valid.Enabled)

@@ -987,6 +987,7 @@ func ipCheckArgSpec() argSpec {
 		"-4": argBool, "--only_v4": argBool,
 		"-6": argBool, "--only_v6": argBool,
 		"-cs": argSingle, "--cr_size": argSingle,
+		"-rs": argSingle, "--resolve_thread_num": argSingle,
 		"-df": argBool, "--disable_file_check": argBool,
 		"--pure_mode": argBool,
 		"--version": argBool,
@@ -1003,6 +1004,7 @@ func ipFilterArgSpec() argSpec {
 		"-4": argBool, "--only_v4": argBool,
 		"-6": argBool, "--only_v6": argBool,
 		"-cs": argSingle, "--cr_size": argSingle,
+		"-rs": argSingle, "--resolve_thread_num": argSingle,
 		"-o": argSingle, "--output": argSingle,
 	}
 }

@@ -29,3 +29,12 @@ func consolePrint(args ...any) {
 	text := strings.TrimSuffix(fmt.Sprintln(args...), "\n")
 	fmt.Fprintln(os.Stdout, text)
 }
+
+func consoleKeepRefreshLine() {
+	printMu.Lock()
+	defer printMu.Unlock()
+	if lastWasRefresh {
+		fmt.Fprintln(os.Stdout)
+		lastWasRefresh = false
+	}
+}

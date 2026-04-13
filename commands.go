@@ -727,7 +727,7 @@ func downloadFile(ctx context.Context, rawURL, path, proxy string) error {
 		}
 	}
 	printDownloadProgress(path, written, total, startedAt)
-	consolePrint("")
+	consoleKeepRefreshLine()
 	consolePrint(fmt.Sprintf("下载geo database到%s 成功.", path))
 	return nil
 }

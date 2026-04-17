@@ -691,15 +691,17 @@ func writePureIPs(infos []IPInfo, path string) error {
 func downloadFile(ctx context.Context, rawURL, path, proxy string) error {
 	consolePrint("正在下载geo database ... ...")
 	consolePrint(fmt.Sprintf("下载代理为: %s", proxy))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return err
-	}
 	client, err := newTimeoutHTTPClient(proxy, 30*time.Second)
 	if err != nil {
 		return err
 	}
-	resp, err := client.Do(req)
+	resp, err := retryRequest(ctx, 2, 0.5, func() (*http.Response, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		return client.Do(req)
+	})
 	if err != nil {
 		return err
 	}
@@ -752,11 +754,13 @@ func selfUpdateGeo(ctx context.Context, paths appPaths, cfg GeoConfig, autoYes b
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.DBAPIURL, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := client.Do(req)
+	resp, err := retryRequest(ctx, 2, 0.5, func() (*http.Response, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.DBAPIURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		return client.Do(req)
+	})
 	if err != nil {
 		return err
 	}
@@ -1082,11 +1086,13 @@ func checkGeoUpdate(ctx context.Context, paths appPaths, geoCfg GeoConfig, updat
 	if err != nil {
 		return
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, geoCfg.DBAPIURL, nil)
-	if err != nil {
-		return
-	}
-	resp, err := client.Do(req)
+	resp, err := retryRequest(ctx, 2, 0.5, func() (*http.Response, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, geoCfg.DBAPIURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		return client.Do(req)
+	})
 	if err != nil {
 		return
 	}

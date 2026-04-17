@@ -322,6 +322,17 @@ func RunIPCheck(ctx context.Context, args []string) error {
 		return nil
 	}
 
+	geoCfg, _ := loadGeoConfig(paths.geoConfig)
+	updateChan := make(chan string, 1)
+	go checkGeoUpdate(ctx, paths, geoCfg, updateChan)
+	defer func() {
+		select {
+		case msg := <-updateChan:
+			consolePrint(msg)
+		default:
+		}
+	}()
+
 	validCtx, validCancel := context.WithCancel(ctx)
 	sigCtrl.setStage(stageValid, validCancel)
 	passed := runValidTest(validCtx, infos, cfg, sigCtrl)
@@ -1060,5 +1071,37 @@ func cfgArgSpec() argSpec {
 	return argSpec{
 		"-o": argSingle, "--output": argSingle,
 		"-e": argBool, "--example": argBool,
+	}
+}
+
+func checkGeoUpdate(ctx context.Context, paths appPaths, geoCfg GeoConfig, updateChan chan<- string) {
+	if geoCfg.DBAPIURL == "" {
+		return
+	}
+	client, err := newTimeoutHTTPClient(geoCfg.Proxy, 10*time.Second)
+	if err != nil {
+		return
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, geoCfg.DBAPIURL, nil)
+	if err != nil {
+		return
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	var remote map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&remote); err != nil {
+		return
+	}
+	local := loadVersionFile(paths.geoVersion)
+	localTag, _ := local["tag_name"].(string)
+	remoteTag, _ := remote["tag_name"].(string)
+	if remoteTag != "" && localTag != remoteTag {
+		if localTag == "" {
+			localTag = "unknown"
+		}
+		updateChan <- fmt.Sprintf("\n[notice] A new release of geo database is available: %s -> %s\n[notice] To update, run: igeo-dl", localTag, remoteTag)
 	}
 }

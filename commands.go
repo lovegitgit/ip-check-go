@@ -695,51 +695,170 @@ func downloadFile(ctx context.Context, rawURL, path, proxy string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := retryRequest(ctx, 2, 0.5, func() (*http.Response, error) {
+
+	tmpPath := path + ".part"
+	progress := newDownloadProgress()
+	var (
+		total      int64 = -1
+		lastUpdate       = time.Now()
+	)
+	buf := make([]byte, 64*1024)
+
+	// Retry with resume to handle flaky connections and unexpected EOFs.
+	const maxAttempts = 6
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		partSize, statErr := fileSize(tmpPath)
+		if statErr != nil {
+			return statErr
+		}
+
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return client.Do(req)
-	})
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed: http %d", resp.StatusCode)
-	}
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	total := resp.ContentLength
-	buf := make([]byte, 32*1024)
-	var written int64
-	startedAt := time.Now()
-	lastUpdate := time.Now()
-	for {
-		n, readErr := resp.Body.Read(buf)
-		if n > 0 {
-			if _, err := file.Write(buf[:n]); err != nil {
+		// Disable transparent gzip/deflate so Content-Length/Range math stays correct.
+		req.Header.Set("Accept-Encoding", "identity")
+		if partSize > 0 {
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", partSize))
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			if attempt == maxAttempts {
 				return err
 			}
-			written += int64(n)
-			if time.Since(lastUpdate) > 150*time.Millisecond {
-				printDownloadProgress(path, written, total, startedAt)
-				lastUpdate = time.Now()
-			}
+			sleepWithBackoff(ctx, attempt, 500*time.Millisecond)
+			continue
 		}
-		if readErr == io.EOF {
+
+		func() {
+			defer resp.Body.Close()
+
+			switch resp.StatusCode {
+			case http.StatusOK, http.StatusPartialContent:
+			case http.StatusRequestedRangeNotSatisfiable:
+				// Common when partSize already equals total.
+				_, _, totalFromCR, ok := parseContentRange(resp.Header.Get("Content-Range"))
+				if ok && totalFromCR > 0 && partSize >= totalFromCR {
+					total = totalFromCR
+					return
+				}
+				err = fmt.Errorf("download failed: http %d", resp.StatusCode)
+				return
+			default:
+				err = fmt.Errorf("download failed: http %d", resp.StatusCode)
+				return
+			}
+
+			// Determine total size if possible.
+			switch resp.StatusCode {
+			case http.StatusOK:
+				if partSize > 0 {
+					// Server ignored our Range request; restart from scratch to avoid corruption.
+					if truncateErr := os.Truncate(tmpPath, 0); truncateErr != nil {
+						err = truncateErr
+						return
+					}
+					partSize = 0
+				}
+				if resp.ContentLength > 0 {
+					total = resp.ContentLength
+				}
+			case http.StatusPartialContent:
+				start, _, totalFromCR, ok := parseContentRange(resp.Header.Get("Content-Range"))
+				if ok && start >= 0 && start != partSize {
+					// Mismatched resume point; restart from scratch.
+					if truncateErr := os.Truncate(tmpPath, 0); truncateErr != nil {
+						err = truncateErr
+						return
+					}
+					partSize = 0
+					total = -1
+					err = errors.New("resume point mismatch")
+					return
+				} else if ok && totalFromCR > 0 {
+					total = totalFromCR
+				} else if resp.ContentLength > 0 {
+					total = partSize + resp.ContentLength
+				}
+			}
+
+			file, openErr := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY, 0o644)
+			if openErr != nil {
+				err = openErr
+				return
+			}
+			defer file.Close()
+			if _, seekErr := file.Seek(partSize, io.SeekStart); seekErr != nil {
+				err = seekErr
+				return
+			}
+
+			progress.Reset(partSize)
+			written := partSize
+			for {
+				n, readErr := resp.Body.Read(buf)
+				if n > 0 {
+					if _, writeErr := file.Write(buf[:n]); writeErr != nil {
+						err = writeErr
+						return
+					}
+					written += int64(n)
+					if time.Since(lastUpdate) > 150*time.Millisecond {
+						speed := progress.Update(written)
+						printDownloadProgress(path, written, total, speed)
+						lastUpdate = time.Now()
+					}
+				}
+				if readErr == nil {
+					continue
+				}
+				if errors.Is(readErr, io.EOF) {
+					break
+				}
+				// Retry on transient read errors (e.g. unexpected EOF / connection reset).
+				err = readErr
+				return
+			}
+
+			// If server advertised a fixed total, ensure we got everything; otherwise resume next attempt.
+			if total > 0 && written < total {
+				err = io.ErrUnexpectedEOF
+				return
+			}
+
+			// Successful completion.
+			speed := progress.Update(written)
+			printDownloadProgress(path, written, total, speed)
+			err = nil
+		}()
+
+		if err == nil {
 			break
 		}
-		if readErr != nil {
-			return readErr
+		if attempt == maxAttempts {
+			return err
 		}
+		sleepWithBackoff(ctx, attempt, 500*time.Millisecond)
 	}
-	printDownloadProgress(path, written, total, startedAt)
+
+	// Finalize: atomic rename part file to target path.
+	finalSize, err := fileSize(tmpPath)
+	if err != nil {
+		return err
+	}
+	if total > 0 && finalSize != total {
+		return fmt.Errorf("download incomplete: got %d bytes, want %d bytes", finalSize, total)
+	}
+	_ = os.Remove(path)
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
 	consoleKeepRefreshLine()
 	consolePrint(fmt.Sprintf("下载geo database到%s 成功.", path))
 	return nil
@@ -838,17 +957,123 @@ func askConfirm(prompt string) bool {
 	}
 }
 
-func printDownloadProgress(path string, current, total int64, startedAt time.Time) {
-	elapsed := time.Since(startedAt).Seconds()
-	speed := int64(0)
-	if elapsed > 0 {
-		speed = int64(float64(current) / elapsed)
+type downloadProgress struct {
+	lastAt    time.Time
+	lastBytes int64
+	emaSpeed  float64
+}
+
+func newDownloadProgress() *downloadProgress {
+	now := time.Now()
+	return &downloadProgress{lastAt: now}
+}
+
+func (p *downloadProgress) Reset(current int64) {
+	p.lastAt = time.Now()
+	p.lastBytes = current
+}
+
+func (p *downloadProgress) Update(current int64) int64 {
+	now := time.Now()
+	dt := now.Sub(p.lastAt).Seconds()
+	if dt <= 0 {
+		return int64(p.emaSpeed)
 	}
+	instant := float64(current-p.lastBytes) / dt
+	if instant < 0 {
+		instant = 0
+	}
+	if p.emaSpeed == 0 {
+		p.emaSpeed = instant
+	} else {
+		const alpha = 0.30
+		p.emaSpeed = p.emaSpeed*(1-alpha) + instant*alpha
+	}
+	p.lastAt = now
+	p.lastBytes = current
+	return int64(p.emaSpeed)
+}
+
+func printDownloadProgress(path string, current, total, speed int64) {
 	if total > 0 {
 		consoleRefresh("%s 已下载 %s/%s 当前速度 %s/s", path, humanSize(current), humanSize(total), humanSize(speed))
 		return
 	}
 	consoleRefresh("%s 已下载 %s 当前速度 %s/s", path, humanSize(current), humanSize(speed))
+}
+
+func fileSize(path string) (int64, error) {
+	info, err := os.Stat(path)
+	if err == nil {
+		return info.Size(), nil
+	}
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	return 0, err
+}
+
+func sleepWithBackoff(ctx context.Context, attempt int, base time.Duration) {
+	if attempt < 1 {
+		attempt = 1
+	}
+	sleep := time.Duration(attempt) * base
+	timer := time.NewTimer(sleep)
+	select {
+	case <-ctx.Done():
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+	case <-timer.C:
+	}
+}
+
+// parseContentRange parses "Content-Range: bytes start-end/total" and returns
+// start, end, total and whether parsing succeeded.
+// It also supports "bytes */total" (start/end will be -1).
+func parseContentRange(v string) (int64, int64, int64, bool) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0, 0, 0, false
+	}
+	if !strings.HasPrefix(strings.ToLower(v), "bytes") {
+		return 0, 0, 0, false
+	}
+	rest := strings.TrimSpace(v[len("bytes"):])
+	parts := strings.SplitN(rest, "/", 2)
+	if len(parts) != 2 {
+		return 0, 0, 0, false
+	}
+	totalPart := strings.TrimSpace(parts[1])
+	total := int64(-1)
+	if totalPart != "*" && totalPart != "" {
+		tt, err := strconv.ParseInt(totalPart, 10, 64)
+		if err != nil {
+			return 0, 0, 0, false
+		}
+		total = tt
+	}
+
+	rangePart := strings.TrimSpace(parts[0])
+	if rangePart == "*" {
+		return -1, -1, total, total > 0
+	}
+	re := strings.SplitN(rangePart, "-", 2)
+	if len(re) != 2 {
+		return 0, 0, 0, false
+	}
+	start, err := strconv.ParseInt(strings.TrimSpace(re[0]), 10, 64)
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	end, err := strconv.ParseInt(strings.TrimSpace(re[1]), 10, 64)
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	return start, end, total, total > 0
 }
 
 func humanSize(v int64) string {

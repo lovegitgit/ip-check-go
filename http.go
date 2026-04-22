@@ -118,6 +118,7 @@ func newTimeoutHTTPClient(proxy string, timeout time.Duration) (*http.Client, er
 		},
 		TLSHandshakeTimeout:   timeout,
 		ResponseHeaderTimeout: timeout,
+		DisableCompression:    true,
 		DisableKeepAlives:     true,
 		ForceAttemptHTTP2:     false,
 	}

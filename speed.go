@@ -104,11 +104,21 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
+	finalize := func(interrupted bool) IPInfo {
+		if interrupted || (hasError.Load() && !cfg.Speed.RemoveErrIP) {
+			info.STTestTag = "*"
+		}
+		if hasError.Load() && cfg.Speed.RemoveErrIP {
+			info.MaxSpeed = 0
+			info.AvgSpeed = 0
+		}
+		return info
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
-			info.STTestTag = "*"
-			return info
+			return finalize(true)
 		case <-ticker.C:
 			end := time.Now()
 			if end.Sub(start) >= 900*time.Millisecond {
@@ -116,7 +126,7 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 				if curSize == 0 {
 					if cfg.Speed.FastCheck && end.Sub(originalStart) > durationSeconds(cfg.Speed.DownloadTime*0.5) {
 						cancel()
-						return info
+						return finalize(false)
 					}
 					start = end
 					continue
@@ -149,21 +159,17 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 				if cfg.Speed.FastCheck && freezeEnd.Sub(realStart) > durationSeconds(cfg.Speed.DownloadTime*0.5) {
 					if info.MaxSpeed < cfg.Speed.DownloadSpeed/2 || info.AvgSpeed < int(float64(cfg.Speed.AvgDownloadSpeed)*0.77) {
 						cancel()
-						return info
+						return finalize(false)
 					}
 				}
 				if freezeEnd.Sub(realStart) > durationSeconds(cfg.Speed.DownloadTime) {
 					cancel()
-					return info
+					return finalize(false)
 				}
 			}
 
 			if downloadDone.Load() {
-				if cfg.Speed.RemoveErrIP && hasError.Load() {
-					info.MaxSpeed = 0
-					info.AvgSpeed = 0
-				}
-				return info
+				return finalize(false)
 			}
 		}
 	}

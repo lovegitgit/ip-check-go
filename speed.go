@@ -112,6 +112,12 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 			info.MaxSpeed = 0
 			info.AvgSpeed = 0
 		}
+		if info.MaxSpeed == -1 {
+			info.MaxSpeed = 0
+		}
+		if info.AvgSpeed == -1 {
+			info.AvgSpeed = 0
+		}
 		return info
 	}
 

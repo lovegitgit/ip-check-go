@@ -154,6 +154,7 @@ func RunIPCheck(ctx context.Context, args []string) error {
 		return err
 	}
 	cfg.PureMode = pureMode
+	cfg.Mode = ModeIPCheck
 	cfg.Runtime.Verbose = verbose
 	if cfg.Runtime.Verbose {
 		cfg.Valid.PrintErr = true
@@ -427,6 +428,7 @@ func RunGeoInfo(ctx context.Context, args []string) error {
 		return ErrUsage
 	}
 	cfg := defaultConfig()
+	cfg.Mode = ModeGeoInfo
 	cfg.Runtime.IPSources = uniqueStrings(fs.Args())
 	svc, err := openGeoService(paths)
 	if err != nil {
@@ -564,6 +566,7 @@ func RunIPFilter(ctx context.Context, args []string) error {
 		return ErrUsage
 	}
 	cfg := defaultConfig()
+	cfg.Mode = ModeIPFilter
 	cfg.Runtime.IPSources = uniqueStrings(fs.Args())
 	cfg.Runtime.WhiteList = uniqueStrings([]string(whiteList))
 	if len(blockList) > 0 && len(cfg.Runtime.WhiteList) > 0 {

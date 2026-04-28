@@ -8,7 +8,16 @@ import (
 	"time"
 )
 
+type WorkMode int
+
+const (
+	ModeIPCheck WorkMode = iota
+	ModeGeoInfo
+	ModeIPFilter
+)
+
 type Config struct {
+	Mode            WorkMode
 	IPPort          int
 	NoSave          bool
 	CIDRSampleIPNum int

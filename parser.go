@@ -107,7 +107,11 @@ func parseCIDR(arg string, cfg Config) []IPInfo {
 	if err != nil || !addrAllowedByFamily(prefix.Addr().String(), cfg) {
 		return nil
 	}
-	ips := samplePrefix(prefix, cfg.CIDRSampleIPNum)
+	sampleSize := cfg.CIDRSampleIPNum
+	if cfg.Mode == ModeGeoInfo {
+		sampleSize = 1
+	}
+	ips := samplePrefix(prefix, sampleSize)
 	out := make([]IPInfo, 0, len(ips))
 	for _, ip := range ips {
 		if addrAllowedByWhiteBlock(ip, cfg) {

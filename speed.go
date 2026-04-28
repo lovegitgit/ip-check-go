@@ -54,38 +54,28 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 	defer cancel()
 	ua := chooseUserAgent(cfg.Speed.UserAgent)
 
-	resp, err := retryRequest(reqCtx, cfg.Speed.MaxRetry, cfg.Speed.RetryFactor, func() (*http.Response, error) {
-		return doPinnedGET(reqCtx, info.IP, info.Port, cfg.Speed.URL, "", timeout, ua)
-	})
-	if err != nil {
-		if cfg.Speed.PrintErr {
-			consolePrint(fmt.Sprintf("speed test for %s encounters error %v", info.simpleInfo(), err))
-		}
-		if cfg.Speed.RemoveErrIP {
-			info.MaxSpeed = 0
-			info.AvgSpeed = 0
-		}
-		return info
-	}
-
 	var (
-		size       atomic.Int64
-		readErr    atomic.Bool
-		startedAt  atomic.Int64
-		stopSignal atomic.Bool
+		size         atomic.Int64
+		readErr      atomic.Bool
+		startedAt    atomic.Int64 // UnixNano
+		downloadDone atomic.Bool
+		hasError     atomic.Bool
 	)
-	readerDone := make(chan struct{})
-	defer func() {
-		stopSignal.Store(true)
-		_ = resp.Body.Close()
-		select {
-		case <-readerDone:
-		case <-time.After(timeout):
-		}
-	}()
 
 	go func() {
-		defer close(readerDone)
+		defer downloadDone.Store(true)
+		resp, err := retryRequest(reqCtx, cfg.Speed.MaxRetry, cfg.Speed.RetryFactor, func() (*http.Response, error) {
+			return doPinnedGET(reqCtx, info.IP, info.Port, cfg.Speed.URL, "", timeout, ua)
+		})
+		if err != nil {
+			hasError.Store(true)
+			if cfg.Speed.PrintErr {
+				consolePrint(fmt.Sprintf("speed test for %s encounters error %v", info.simpleInfo(), err))
+			}
+			return
+		}
+		defer resp.Body.Close()
+
 		buf := make([]byte, 16*1024)
 		for {
 			n, err := resp.Body.Read(buf)
@@ -95,12 +85,13 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 				}
 				size.Add(int64(n))
 			}
-			if stopSignal.Load() {
+			if reqCtx.Err() != nil {
 				return
 			}
 			if err != nil {
 				if err != io.EOF {
 					readErr.Store(true)
+					hasError.Store(true)
 				}
 				return
 			}
@@ -110,61 +101,70 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 	originalStart := time.Now()
 	start := originalStart
 	var oldSize int64
-	for {
-		if ctx.Err() != nil {
-			stopSignal.Store(true)
-			return info
-		}
-		time.Sleep(100 * time.Millisecond)
-		end := time.Now()
-		if end.Sub(start) >= 900*time.Millisecond {
-			curSize := size.Load()
-			if curSize == 0 {
-				if end.Sub(originalStart) > durationSeconds(cfg.Speed.DownloadTime*0.5) {
-					break
-				}
-				start = end
-				continue
-			}
-			realStartUnix := startedAt.Load()
-			if realStartUnix == 0 {
-				continue
-			}
-			realStart := time.Unix(0, realStartUnix)
-			if end.Sub(realStart) < 100*time.Millisecond {
-				continue
-			}
-			freezeEnd := time.Now()
-			freezeSize := size.Load()
-			speedNow := int(float64(freezeSize-oldSize) / freezeEnd.Sub(start).Seconds() / 1024)
-			avgSpeed := speedNow
-			if freezeEnd.Sub(realStart) > 900*time.Millisecond {
-				avgSpeed = int(float64(freezeSize) / freezeEnd.Sub(realStart).Seconds() / 1024)
-			}
-			consoleRefresh("  当前下载速度(cur/avg)为: %d/%d kB/s", speedNow, avgSpeed)
-			if speedNow > info.MaxSpeed {
-				info.MaxSpeed = speedNow
-			}
-			info.AvgSpeed = avgSpeed
-			start = freezeEnd
-			oldSize = freezeSize
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 
-			if cfg.Speed.FastCheck && freezeEnd.Sub(realStart) > durationSeconds(cfg.Speed.DownloadTime*0.5) {
-				if info.MaxSpeed < cfg.Speed.DownloadSpeed/2 || info.AvgSpeed < int(float64(cfg.Speed.AvgDownloadSpeed)*0.77) {
-					break
+	for {
+		select {
+		case <-ctx.Done():
+			info.STTestTag = "*"
+			return info
+		case <-ticker.C:
+			end := time.Now()
+			if end.Sub(start) >= 900*time.Millisecond {
+				curSize := size.Load()
+				if curSize == 0 {
+					if cfg.Speed.FastCheck && end.Sub(originalStart) > durationSeconds(cfg.Speed.DownloadTime*0.5) {
+						cancel()
+						return info
+					}
+					start = end
+					continue
+				}
+
+				realStartUnix := startedAt.Load()
+				if realStartUnix == 0 {
+					continue
+				}
+				realStart := time.Unix(0, realStartUnix)
+				if end.Sub(realStart) < 100*time.Millisecond {
+					continue
+				}
+
+				freezeEnd := end
+				freezeSize := curSize
+				speedNow := int(float64(freezeSize-oldSize) / freezeEnd.Sub(start).Seconds() / 1024)
+				avgSpeed := speedNow
+				if freezeEnd.Sub(realStart) > 900*time.Millisecond {
+					avgSpeed = int(float64(freezeSize) / freezeEnd.Sub(realStart).Seconds() / 1024)
+				}
+				consoleRefresh("  当前下载速度(cur/avg)为: %d/%d kB/s", speedNow, avgSpeed)
+				if speedNow > info.MaxSpeed {
+					info.MaxSpeed = speedNow
+				}
+				info.AvgSpeed = avgSpeed
+				start = freezeEnd
+				oldSize = freezeSize
+
+				if cfg.Speed.FastCheck && freezeEnd.Sub(realStart) > durationSeconds(cfg.Speed.DownloadTime*0.5) {
+					if info.MaxSpeed < cfg.Speed.DownloadSpeed/2 || info.AvgSpeed < int(float64(cfg.Speed.AvgDownloadSpeed)*0.77) {
+						cancel()
+						return info
+					}
+				}
+				if freezeEnd.Sub(realStart) > durationSeconds(cfg.Speed.DownloadTime) {
+					cancel()
+					return info
 				}
 			}
-			if freezeEnd.Sub(realStart) > durationSeconds(cfg.Speed.DownloadTime) {
-				break
+
+			if downloadDone.Load() {
+				if cfg.Speed.RemoveErrIP && hasError.Load() {
+					info.MaxSpeed = 0
+					info.AvgSpeed = 0
+				}
+				return info
 			}
 		}
-		if readErr.Load() {
-			break
-		}
 	}
-	if cfg.Speed.RemoveErrIP && readErr.Load() {
-		info.MaxSpeed = 0
-		info.AvgSpeed = 0
-	}
-	return info
 }

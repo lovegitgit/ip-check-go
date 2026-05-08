@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -803,41 +804,72 @@ func downloadFile(ctx context.Context, rawURL, path, proxy string) error {
 			}
 
 			progress.Reset(partSize)
-			written := partSize
+			var (
+				written     atomic.Int64
+				readErrChan = make(chan error, 1)
+			)
+			written.Store(partSize)
+			go func() {
+				for {
+					n, readErr := resp.Body.Read(buf)
+					if n > 0 {
+						if _, writeErr := file.Write(buf[:n]); writeErr != nil {
+							readErrChan <- writeErr
+							return
+						}
+						written.Add(int64(n))
+					}
+					if readErr == nil {
+						continue
+					}
+					readErrChan <- readErr
+					return
+				}
+			}()
+
+			ticker := time.NewTicker(150 * time.Millisecond)
+			defer ticker.Stop()
 			for {
-				n, readErr := resp.Body.Read(buf)
-				if n > 0 {
-					if _, writeErr := file.Write(buf[:n]); writeErr != nil {
-						err = writeErr
-						return
+				select {
+				case readErr := <-readErrChan:
+					current := written.Load()
+					var speed int64
+					if errors.Is(readErr, io.EOF) {
+						speed = progress.Final(current)
+					} else {
+						speed = progress.Update(current)
 					}
-					written += int64(n)
-					if time.Since(lastUpdate) > 150*time.Millisecond {
-						speed := progress.Update(written)
-						printDownloadProgress(path, written, total, speed)
-						lastUpdate = time.Now()
+					printDownloadProgress(path, current, total, speed)
+					lastUpdate = time.Now()
+					if errors.Is(readErr, io.EOF) {
+						goto readDone
 					}
+					// Retry on transient read errors (e.g. unexpected EOF / connection reset).
+					err = readErr
+					return
+				case <-ticker.C:
+					current := written.Load()
+					if time.Since(lastUpdate) < 150*time.Millisecond {
+						continue
+					}
+					speed := progress.Update(current)
+					printDownloadProgress(path, current, total, speed)
+					lastUpdate = time.Now()
 				}
-				if readErr == nil {
-					continue
-				}
-				if errors.Is(readErr, io.EOF) {
-					break
-				}
-				// Retry on transient read errors (e.g. unexpected EOF / connection reset).
-				err = readErr
-				return
 			}
 
+		readDone:
+			finalWritten := written.Load()
+
 			// If server advertised a fixed total, ensure we got everything; otherwise resume next attempt.
-			if total > 0 && written < total {
+			if total > 0 && finalWritten < total {
 				err = io.ErrUnexpectedEOF
 				return
 			}
 
 			// Successful completion.
-			speed := progress.Update(written)
-			printDownloadProgress(path, written, total, speed)
+			speed := progress.Final(finalWritten)
+			printDownloadProgress(path, finalWritten, total, speed)
 			err = nil
 		}()
 
@@ -982,6 +1014,11 @@ func (p *downloadProgress) Update(current int64) int64 {
 	if dt <= 0 {
 		return int64(p.emaSpeed)
 	}
+	if current == p.lastBytes {
+		p.emaSpeed = 0
+		p.lastAt = now
+		return 0
+	}
 	instant := float64(current-p.lastBytes) / dt
 	if instant < 0 {
 		instant = 0
@@ -995,6 +1032,13 @@ func (p *downloadProgress) Update(current int64) int64 {
 	p.lastAt = now
 	p.lastBytes = current
 	return int64(p.emaSpeed)
+}
+
+func (p *downloadProgress) Final(current int64) int64 {
+	if current == p.lastBytes {
+		return int64(p.emaSpeed)
+	}
+	return p.Update(current)
 }
 
 func printDownloadProgress(path string, current, total, speed int64) {

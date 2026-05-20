@@ -336,7 +336,7 @@ func RunIPCheck(ctx context.Context, args []string) error {
 	}()
 
 	validCtx, validCancel := context.WithCancel(ctx)
-	sigCtrl.setStage(stageValid, validCancel)
+	sigCtrl.setStage(stageValid, validCtx, validCancel)
 	passed := runValidTest(validCtx, infos, cfg, sigCtrl)
 	if validCtx.Err() != nil {
 		sigCtrl.printCache()
@@ -348,7 +348,7 @@ func RunIPCheck(ctx context.Context, args []string) error {
 		return nil
 	}
 	rttCtx, rttCancel := context.WithCancel(ctx)
-	sigCtrl.setStage(stageRTT, rttCancel)
+	sigCtrl.setStage(stageRTT, rttCtx, rttCancel)
 	passed = runRTTTest(rttCtx, passed, cfg, sigCtrl)
 	if rttCtx.Err() != nil {
 		sigCtrl.printCache()
@@ -360,7 +360,7 @@ func RunIPCheck(ctx context.Context, args []string) error {
 		return nil
 	}
 	speedCtx, speedCancel := context.WithCancel(ctx)
-	sigCtrl.setStage(stageSpeed, speedCancel)
+	sigCtrl.setStage(stageSpeed, speedCtx, speedCancel)
 	passed = runSpeedTest(speedCtx, passed, cfg, sigCtrl)
 	if speedCtx.Err() != nil {
 		sigCtrl.printCache()

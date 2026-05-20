@@ -23,6 +23,7 @@ const (
 type signalController struct {
 	mu              sync.Mutex
 	currentStage    stageName
+	currentCtx      context.Context
 	cancelStage     context.CancelFunc
 	lastInterruptAt time.Time
 	cachedIPs       []IPInfo
@@ -32,10 +33,11 @@ func newSignalController() *signalController {
 	return &signalController{}
 }
 
-func (s *signalController) setStage(stage stageName, cancel context.CancelFunc) {
+func (s *signalController) setStage(stage stageName, ctx context.Context, cancel context.CancelFunc) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.currentStage = stage
+	s.currentCtx = ctx
 	s.cancelStage = cancel
 	s.cachedIPs = nil
 }
@@ -50,6 +52,7 @@ func (s *signalController) clearStage() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.currentStage = stageUnknown
+	s.currentCtx = nil
 	s.cancelStage = nil
 }
 
@@ -57,6 +60,7 @@ func (s *signalController) finish() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.currentStage = stageExit
+	s.currentCtx = nil
 	s.cancelStage = nil
 }
 
@@ -99,6 +103,9 @@ func (s *signalController) handleInterrupt() {
 	}
 	s.lastInterruptAt = now
 	if s.currentStage == stageUnknown || s.currentStage == stageExit {
+		os.Exit(130)
+	}
+	if s.currentCtx != nil && s.currentCtx.Err() != nil {
 		os.Exit(130)
 	}
 	if s.cancelStage != nil {

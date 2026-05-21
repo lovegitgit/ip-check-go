@@ -41,6 +41,8 @@ func RunIPCheck(ctx context.Context, args []string) error {
 		preferOrgs stringList
 		blockOrgs  stringList
 		preferPorts intList
+		preferColo stringList
+		blockColo  stringList
 		maxVT int
 		maxRT int
 		maxST int
@@ -81,6 +83,10 @@ func RunIPCheck(ctx context.Context, args []string) error {
 	fs.Var(&blockOrgs, "block_orgs", "屏蔽org, 可重复传入")
 	fs.Var(&preferPorts, "pp", "针对 ip:port 测试源筛选端口, 可重复传入")
 	fs.Var(&preferPorts, "prefer_ports", "针对 ip:port 测试源筛选端口, 可重复传入")
+	fs.Var(&preferColo, "pc", "偏好colo选择, 可重复传入, 如 -pc HKG -pc SJC")
+	fs.Var(&preferColo, "prefer_colo", "偏好colo选择, 可重复传入")
+	fs.Var(&blockColo, "bc", "屏蔽colo选择, 可重复传入, 如 -bc HKG -bc SJC")
+	fs.Var(&blockColo, "block_colo", "屏蔽colo选择, 可重复传入")
 	fs.IntVar(&maxVT, "lv", 0, "最大用来检测有效(valid) ip数量限制")
 	fs.IntVar(&maxVT, "max_vt_ip_count", 0, "最大用来检测有效(valid) ip数量限制")
 	fs.IntVar(&maxRT, "lr", 0, "最大用来检测rtt ip数量限制")
@@ -164,39 +170,31 @@ func RunIPCheck(ctx context.Context, args []string) error {
 	}
 	cfg.Runtime.IPSources = uniqueStrings(fs.Args())
 	cfg.Runtime.WhiteList = uniqueStrings([]string(whiteList))
-	if len(blockList) > 0 && len(cfg.Runtime.WhiteList) > 0 {
-		consolePrint("偏好参数与黑名单参数同时存在, 自动忽略黑名单参数!")
-	}
 	if len(cfg.Runtime.WhiteList) == 0 {
 		cfg.Runtime.BlockList = uniqueStrings([]string(blockList))
 	}
+	pcList := []string(preferColo)
+	bcList := []string(blockColo)
+	if len(pcList) > 0 && len(bcList) > 0 {
+		bcList = nil
+	}
+	if len(pcList) > 0 {
+		cfg.Valid.PreferColo = toUpperSlice(uniqueStrings(pcList))
+		cfg.Valid.BlockColo = nil
+	}
+	if len(bcList) > 0 {
+		cfg.Valid.BlockColo = toUpperSlice(uniqueStrings(bcList))
+		cfg.Valid.PreferColo = nil
+	}
+	if len(cfg.Valid.PreferColo) > 0 && len(cfg.Valid.BlockColo) > 0 {
+		cfg.Valid.BlockColo = nil
+	}
 	cfg.Runtime.PreferLocs = uniqueStrings([]string(preferLocs))
-	if len(cfg.Runtime.WhiteList) > 0 {
-		consolePrint("白名单参数为:", pyStringList(cfg.Runtime.WhiteList))
-	}
-	if len(cfg.Runtime.BlockList) > 0 {
-		consolePrint("黑名单参数为:", pyStringList(cfg.Runtime.BlockList))
-	}
-	if len(cfg.Runtime.PreferLocs) > 0 {
-		consolePrint("优选地区参数为:", pyStringList(cfg.Runtime.PreferLocs))
-	}
 	cfg.Runtime.PreferOrgs = uniqueStrings([]string(preferOrgs))
-	if len(blockOrgs) > 0 && len(cfg.Runtime.PreferOrgs) > 0 {
-		consolePrint("偏好org参数与屏蔽org参数同时存在, 自动忽略屏蔽org参数!")
-	}
 	if len(cfg.Runtime.PreferOrgs) == 0 {
 		cfg.Runtime.BlockOrgs = uniqueStrings([]string(blockOrgs))
 	}
-	if len(cfg.Runtime.PreferOrgs) > 0 {
-		consolePrint("优选org 参数为:", pyStringList(cfg.Runtime.PreferOrgs))
-	}
-	if len(cfg.Runtime.BlockOrgs) > 0 {
-		consolePrint("屏蔽org 参数为:", pyStringList(cfg.Runtime.BlockOrgs))
-	}
 	cfg.Runtime.PreferPorts = []int(preferPorts)
-	if len(cfg.Runtime.PreferPorts) > 0 {
-		consolePrint("ip:port 测试源端口为:", pyIntList(cfg.Runtime.PreferPorts))
-	}
 	cfg.Valid.Enabled = !disableVT
 	cfg.RTT.Enabled = !disableRT
 	cfg.Speed.Enabled = !disableST
@@ -280,6 +278,36 @@ func RunIPCheck(ctx context.Context, args []string) error {
 	consolePrint(fmt.Sprintf("纯净模式: %s", pyBool(cfg.PureMode)))
 	consolePrint(fmt.Sprintf("是否开启调试信息: %s", pyBool(cfg.Runtime.Verbose)))
 	consolePrint(fmt.Sprintf("测试源文件为: %s", pyStringList(cfg.Runtime.IPSources)))
+	if len(blockList) > 0 && len(cfg.Runtime.WhiteList) > 0 {
+		consolePrint("偏好参数与黑名单参数同时存在, 自动忽略黑名单参数!")
+	}
+	if len(cfg.Runtime.WhiteList) > 0 {
+		consolePrint("白名单参数为:", pyStringList(cfg.Runtime.WhiteList))
+	}
+	if len(cfg.Runtime.BlockList) > 0 {
+		consolePrint("黑名单参数为:", pyStringList(cfg.Runtime.BlockList))
+	}
+	if len(cfg.Valid.PreferColo) > 0 {
+		consolePrint("可用性测试优选colo 参数为:", pyStringList(cfg.Valid.PreferColo))
+	}
+	if len(cfg.Valid.BlockColo) > 0 {
+		consolePrint("可用性测试屏蔽colo 参数为:", pyStringList(cfg.Valid.BlockColo))
+	}
+	if len(cfg.Runtime.PreferLocs) > 0 {
+		consolePrint("优选地区参数为:", pyStringList(cfg.Runtime.PreferLocs))
+	}
+	if len(blockOrgs) > 0 && len(cfg.Runtime.PreferOrgs) > 0 {
+		consolePrint("偏好org参数与屏蔽org参数同时存在, 自动忽略屏蔽org参数!")
+	}
+	if len(cfg.Runtime.PreferOrgs) > 0 {
+		consolePrint("优选org 参数为:", pyStringList(cfg.Runtime.PreferOrgs))
+	}
+	if len(cfg.Runtime.BlockOrgs) > 0 {
+		consolePrint("屏蔽org 参数为:", pyStringList(cfg.Runtime.BlockOrgs))
+	}
+	if len(cfg.Runtime.PreferPorts) > 0 {
+		consolePrint("ip:port 测试源端口为:", pyIntList(cfg.Runtime.PreferPorts))
+	}
 	consolePrint(fmt.Sprintf("测试端口为: %d", cfg.IPPort))
 	consolePrint(fmt.Sprintf("可用性测试文件检测开关为: %s", pyBool(cfg.Valid.FileCheck)))
 	consolePrint(fmt.Sprintf("期望最大rtt 为: %s ms", pyFloat(cfg.RTT.MaxRTT)))
@@ -1251,6 +1279,8 @@ func ipCheckArgSpec() argSpec {
 		"-po": argMulti, "--prefer_orgs": argMulti,
 		"-bo": argMulti, "--block_orgs": argMulti,
 		"-pp": argMulti, "--prefer_ports": argMulti,
+		"-pc": argMulti, "--prefer_colo": argMulti,
+		"-bc": argMulti, "--block_colo": argMulti,
 		"-lv": argSingle, "--max_vt_ip_count": argSingle,
 		"-lr": argSingle, "--max_rt_ip_count": argSingle,
 		"-ls": argSingle, "--max_st_ip_count": argSingle,

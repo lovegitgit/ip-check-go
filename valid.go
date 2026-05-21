@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -112,6 +113,9 @@ func validSingle(ctx context.Context, info IPInfo, cfg Config) (IPInfo, bool) {
 		}
 		info.Loc = loc
 		info.Colo = colo
+		if !checkColoValid(colo, cfg) {
+			return info, false
+		}
 	}
 
 	if cfg.Valid.FileCheck && cfg.Valid.FileURL != "" {
@@ -183,4 +187,26 @@ func parseTraceBody(body []byte, checkKey, hostName string) (ok bool, loc string
 		}
 	}
 	return ok, loc, colo
+}
+
+func checkColoValid(colo string, cfg Config) bool {
+	if colo == "" {
+		return len(cfg.Valid.PreferColo) == 0
+	}
+	if len(cfg.Valid.PreferColo) > 0 {
+		for _, p := range cfg.Valid.PreferColo {
+			if strings.HasPrefix(colo, p) {
+				return true
+			}
+		}
+		return false
+	} else if len(cfg.Valid.BlockColo) > 0 {
+		for _, b := range cfg.Valid.BlockColo {
+			if strings.HasPrefix(colo, b) {
+				return false
+			}
+		}
+		return true
+	}
+	return true
 }

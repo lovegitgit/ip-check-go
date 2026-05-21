@@ -53,6 +53,8 @@ type Config struct {
 		Timeout      float64
 		CheckKey     string
 		PrintErr     bool
+		PreferColo   []string
+		BlockColo    []string
 	}
 
 	RTT struct {

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 func defaultConfig() Config {
@@ -73,6 +74,8 @@ func loadConfig(path string) (Config, error) {
 	cfg.Valid.RetryFactor = floatValue(valid, "retry_factor", cfg.Valid.RetryFactor)
 	cfg.Valid.Timeout = floatValue(valid, "timeout", cfg.Valid.Timeout)
 	cfg.Valid.PrintErr = boolValue(valid, "print_err", cfg.Valid.PrintErr)
+	cfg.Valid.PreferColo = toUpperSlice(stringSliceValue(valid, "prefer_colo", cfg.Valid.PreferColo))
+	cfg.Valid.BlockColo = toUpperSlice(stringSliceValue(valid, "block_colo", cfg.Valid.BlockColo))
 
 	rtt := sections["rtt test"]
 	cfg.RTT.Enabled = boolValue(rtt, "enabled", cfg.RTT.Enabled)
@@ -170,6 +173,34 @@ func floatValue(section map[string]string, key string, def float64) float64 {
 		return def
 	}
 	return parsed
+}
+
+func stringSliceValue(section map[string]string, key string, def []string) []string {
+	val := stringValue(section, key, "")
+	if val == "" {
+		return def
+	}
+	val = strings.TrimSpace(val)
+	if !strings.HasPrefix(val, "[") || !strings.HasSuffix(val, "]") {
+		return def
+	}
+	content := val[1 : len(val)-1]
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return []string{}
+	}
+	parts := strings.Split(content, ",")
+	var result []string
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "'") && strings.HasSuffix(part, "'") {
+			part = part[1 : len(part)-1]
+		} else if strings.HasPrefix(part, "\"") && strings.HasSuffix(part, "\"") {
+			part = part[1 : len(part)-1]
+		}
+		result = append(result, part)
+	}
+	return result
 }
 
 func ensureIPCheckConfig(paths appPaths, path string) (string, error) {

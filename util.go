@@ -245,3 +245,14 @@ func minInt(a, b int) int {
 	}
 	return b
 }
+
+func toUpperSlice(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, len(in))
+	for i, item := range in {
+		out[i] = strings.ToUpper(item)
+	}
+	return out
+}

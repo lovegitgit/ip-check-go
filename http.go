@@ -25,35 +25,14 @@ func (b *transportBody) Close() error {
 	return err
 }
 
-type timeoutConn struct {
-	net.Conn
-	timeout time.Duration
-}
 
-func (c *timeoutConn) Read(p []byte) (int, error) {
-	if c.timeout > 0 {
-		_ = c.Conn.SetReadDeadline(time.Now().Add(c.timeout))
-	}
-	return c.Conn.Read(p)
-}
-
-func (c *timeoutConn) Write(p []byte) (int, error) {
-	if c.timeout > 0 {
-		_ = c.Conn.SetWriteDeadline(time.Now().Add(c.timeout))
-	}
-	return c.Conn.Write(p)
-}
 
 func pinnedTransport(targetIP string, port int, serverName string, timeout time.Duration) *http.Transport {
 	dialer := &net.Dialer{Timeout: timeout}
 	return &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(targetIP, fmt.Sprint(port)))
-			if err != nil {
-				return nil, err
-			}
-			return &timeoutConn{Conn: conn, timeout: timeout}, nil
+			return dialer.DialContext(ctx, network, net.JoinHostPort(targetIP, fmt.Sprint(port)))
 		},
 		TLSClientConfig: &tls.Config{
 			ServerName:         serverName,
@@ -110,11 +89,7 @@ func newTimeoutHTTPClient(proxy string, timeout time.Duration) (*http.Client, er
 	dialer := &net.Dialer{Timeout: timeout}
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			conn, err := dialer.DialContext(ctx, network, address)
-			if err != nil {
-				return nil, err
-			}
-			return &timeoutConn{Conn: conn, timeout: timeout}, nil
+			return dialer.DialContext(ctx, network, address)
 		},
 		TLSHandshakeTimeout:   timeout,
 		ResponseHeaderTimeout: timeout,

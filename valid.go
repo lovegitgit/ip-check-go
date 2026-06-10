@@ -87,7 +87,9 @@ func validSingle(ctx context.Context, info IPInfo, cfg Config) (IPInfo, bool) {
 	traceURL := fmt.Sprintf("https://%s%s", cfg.Valid.HostName, cfg.Valid.Path)
 	ua := chooseUserAgent(cfg.Valid.UserAgent)
 	resp, err := retryRequest(ctx, cfg.Valid.MaxRetry, cfg.Valid.RetryFactor, func() (*http.Response, error) {
-		return doPinnedGET(ctx, info.IP, info.Port, traceURL, cfg.Valid.HostName, durationSeconds(cfg.Valid.Timeout), ua)
+		reqCtx, reqCancel := context.WithTimeout(ctx, durationSeconds(cfg.Valid.Timeout))
+		defer reqCancel()
+		return doPinnedGET(reqCtx, info.IP, info.Port, traceURL, cfg.Valid.HostName, durationSeconds(cfg.Valid.Timeout), ua)
 	})
 	if err != nil {
 		if cfg.Valid.PrintErr {
@@ -128,7 +130,9 @@ func validSingle(ctx context.Context, info IPInfo, cfg Config) (IPInfo, bool) {
 		}
 		fileUA := chooseUserAgent(cfg.Valid.UserAgent)
 		fileResp, err := retryRequest(ctx, cfg.Valid.MaxRetry, cfg.Valid.RetryFactor, func() (*http.Response, error) {
-			return doPinnedGET(ctx, info.IP, info.Port, cfg.Valid.FileURL, fileHost, durationSeconds(cfg.Valid.Timeout), fileUA)
+			reqCtx, reqCancel := context.WithTimeout(ctx, durationSeconds(cfg.Valid.Timeout))
+			defer reqCancel()
+			return doPinnedGET(reqCtx, info.IP, info.Port, cfg.Valid.FileURL, fileHost, durationSeconds(cfg.Valid.Timeout), fileUA)
 		})
 		if err != nil {
 			if cfg.Valid.PrintErr {

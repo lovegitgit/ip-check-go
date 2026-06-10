@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var seededRand = mrand.New(mrand.NewSource(time.Now().UnixNano()))
+// seededRand removed. Using package-level concurrent-safe math/rand functions instead.
 
 func isIPAddress(s string) bool {
 	_, err := netip.ParseAddr(strings.Trim(s, "[]"))
@@ -108,7 +108,7 @@ func chooseUserAgent(enabled bool) string {
 	if !enabled || len(userAgents) == 0 {
 		return ""
 	}
-	return userAgents[seededRand.Intn(len(userAgents))]
+	return userAgents[mrand.Intn(len(userAgents))]
 }
 
 func generatedTimeDescription() string {
@@ -119,7 +119,7 @@ func sampleIPInfos(in []IPInfo, n int) []IPInfo {
 	if n <= 0 || len(in) <= n {
 		return in
 	}
-	indexes := seededRand.Perm(len(in))[:n]
+	indexes := mrand.Perm(len(in))[:n]
 	out := make([]IPInfo, 0, n)
 	for _, idx := range indexes {
 		out = append(out, in[idx])
@@ -178,7 +178,7 @@ func randomBigInt(max *big.Int) *big.Int {
 		return n
 	}
 	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, seededRand.Uint64())
+	binary.LittleEndian.PutUint64(buf, mrand.Uint64())
 	return new(big.Int).SetBytes(buf)
 }
 

@@ -68,7 +68,9 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 			return doPinnedGET(reqCtx, info.IP, info.Port, cfg.Speed.URL, "", timeout, ua)
 		})
 		if err != nil {
-			hasError.Store(true)
+			if reqCtx.Err() == nil {
+				hasError.Store(true)
+			}
 			if cfg.Speed.PrintErr {
 				consolePrint(fmt.Sprintf("speed test for %s encounters error %v", info.simpleInfo(), err))
 			}
@@ -90,8 +92,10 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 			}
 			if err != nil {
 				if err != io.EOF {
-					readErr.Store(true)
-					hasError.Store(true)
+					if reqCtx.Err() == nil {
+						readErr.Store(true)
+						hasError.Store(true)
+					}
 				}
 				return
 			}

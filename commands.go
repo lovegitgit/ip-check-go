@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	mrand "math/rand"
 	"net/http"
 	"os"
 	"sort"
@@ -1354,7 +1355,7 @@ func pyIntList(items []int) string {
 }
 
 func shuffleIPInfos(infos []IPInfo) {
-	seededRand.Shuffle(len(infos), func(i, j int) {
+	mrand.Shuffle(len(infos), func(i, j int) {
 		infos[i], infos[j] = infos[j], infos[i]
 	})
 }

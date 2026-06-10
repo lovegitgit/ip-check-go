@@ -855,7 +855,7 @@ func downloadFile(ctx context.Context, rawURL, path, proxy string) error {
 				}
 			}()
 
-			ticker := time.NewTicker(150 * time.Millisecond)
+			ticker := time.NewTicker(300 * time.Millisecond)
 			defer ticker.Stop()
 			for {
 				select {
@@ -877,7 +877,7 @@ func downloadFile(ctx context.Context, rawURL, path, proxy string) error {
 					return
 				case <-ticker.C:
 					current := written.Load()
-					if time.Since(lastUpdate) < 150*time.Millisecond {
+					if time.Since(lastUpdate) < 300 * time.Millisecond {
 						continue
 					}
 					speed := progress.Update(current)

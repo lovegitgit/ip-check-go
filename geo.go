@@ -227,11 +227,19 @@ func filterByBlockOrgsWithGeo(in []IPInfo, block []string, geoSvc *geoService) [
 }
 
 func normalizeCompact(s string) string {
-	s = strings.ToUpper(s)
-	s = strings.ReplaceAll(s, " ", "")
-	s = strings.ReplaceAll(s, "-", "")
-	s = strings.ReplaceAll(s, "_", "")
-	return s
+	var sb strings.Builder
+	sb.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == ' ' || c == '-' || c == '_' {
+			continue
+		}
+		if c >= 'a' && c <= 'z' {
+			c = c - 'a' + 'A'
+		}
+		sb.WriteByte(c)
+	}
+	return sb.String()
 }
 
 func normalizeMatchers(items []string) []string {

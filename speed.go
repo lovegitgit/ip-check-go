@@ -108,27 +108,14 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
-	finalize := func(interrupted bool) IPInfo {
-		if interrupted || (hasError.Load() && !cfg.Speed.RemoveErrIP) {
-			info.STTestTag = "*"
-		}
-		if hasError.Load() && cfg.Speed.RemoveErrIP {
-			info.MaxSpeed = 0
-			info.AvgSpeed = 0
-		}
-		if info.MaxSpeed == -1 {
-			info.MaxSpeed = 0
-		}
-		if info.AvgSpeed == -1 {
-			info.AvgSpeed = 0
-		}
-		return info
+	finalize := func() IPInfo {
+		return finalizeSpeed(info, ctx.Err() != nil, hasError.Load(), cfg)
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			return finalize(true)
+			return finalize()
 		case <-ticker.C:
 			end := time.Now()
 			if end.Sub(start) >= 900*time.Millisecond {
@@ -136,7 +123,7 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 				if curSize == 0 {
 					if cfg.Speed.FastCheck && end.Sub(originalStart) > durationSeconds(cfg.Speed.DownloadTime*0.5) {
 						cancel()
-						return finalize(false)
+						return finalize()
 					}
 					start = end
 					continue
@@ -169,18 +156,37 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 				if cfg.Speed.FastCheck && freezeEnd.Sub(realStart) > durationSeconds(cfg.Speed.DownloadTime*0.5) {
 					if info.MaxSpeed < cfg.Speed.DownloadSpeed/2 || info.AvgSpeed < int(float64(cfg.Speed.AvgDownloadSpeed)*0.77) {
 						cancel()
-						return finalize(false)
+						return finalize()
 					}
 				}
 				if freezeEnd.Sub(realStart) > durationSeconds(cfg.Speed.DownloadTime) {
 					cancel()
-					return finalize(false)
+					return finalize()
 				}
 			}
 
 			if downloadDone.Load() {
-				return finalize(false)
+				return finalize()
 			}
 		}
 	}
 }
+
+func finalizeSpeed(info IPInfo, interrupted bool, hasError bool, cfg Config) IPInfo {
+	if info.MaxSpeed == -1 {
+		info.MaxSpeed = 0
+	}
+	if info.AvgSpeed == -1 {
+		info.AvgSpeed = 0
+	}
+	if hasError && cfg.Speed.RemoveErrIP {
+		info.MaxSpeed = 0
+		info.AvgSpeed = 0
+	}
+	isSpeedOk := info.MaxSpeed >= cfg.Speed.DownloadSpeed && info.AvgSpeed >= cfg.Speed.AvgDownloadSpeed
+	if isSpeedOk && (interrupted || (hasError && !cfg.Speed.RemoveErrIP)) {
+		info.STTestTag = "*"
+	}
+	return info
+}
+

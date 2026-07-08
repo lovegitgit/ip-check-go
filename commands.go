@@ -455,6 +455,7 @@ func RunGeoInfo(ctx context.Context, args []string) error {
 		return ErrUsage
 	}
 	if fs.NArg() == 0 {
+		fs.Usage()
 		return ErrUsage
 	}
 	cfg := defaultConfig()

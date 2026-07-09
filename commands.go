@@ -36,41 +36,41 @@ func RunIPCheck(ctx context.Context, args []string) error {
 	}
 
 	var (
-		whiteList  stringList
-		blockList  stringList
-		preferLocs stringList
-		preferOrgs stringList
-		blockOrgs  stringList
-		preferPorts intList
-		preferColo stringList
-		blockColo  stringList
-		maxVT int
-		maxRT int
-		maxST int
-		maxBT int
-		port  int
-		host  string
-		disableRT bool
-		disableVT bool
-		disableST bool
-		output string
-		fastCheck bool
-		speed int
-		avgSpeed int
-		rtt int
-		loss int
-		configPath string
-		testURL string
-		verbose bool
-		noSave bool
-		dryRun bool
-		onlyV4 bool
-		onlyV6 bool
-		crSize int
+		whiteList        stringList
+		blockList        stringList
+		preferLocs       stringList
+		preferOrgs       stringList
+		blockOrgs        stringList
+		preferPorts      intList
+		preferColo       stringList
+		blockColo        stringList
+		maxVT            int
+		maxRT            int
+		maxST            int
+		maxBT            int
+		port             int
+		host             string
+		disableRT        bool
+		disableVT        bool
+		disableST        bool
+		output           string
+		fastCheck        bool
+		speed            int
+		avgSpeed         int
+		rtt              int
+		loss             int
+		configPath       string
+		testURL          string
+		verbose          bool
+		noSave           bool
+		dryRun           bool
+		onlyV4           bool
+		onlyV6           bool
+		crSize           int
 		resolveThreadNum int
 		disableFileCheck bool
-		pureMode bool
-		showVersion bool
+		pureMode         bool
+		showVersion      bool
 	)
 	fs.Var(&whiteList, "w", "偏好ip参数, 可重复传入, 如 -w 8 -w 9")
 	fs.Var(&whiteList, "white_list", "偏好ip参数, 可重复传入, 如 -white_list 8 -white_list 9")
@@ -879,7 +879,7 @@ func downloadFile(ctx context.Context, rawURL, path, proxy string) error {
 					return
 				case <-ticker.C:
 					current := written.Load()
-					if time.Since(lastUpdate) < 300 * time.Millisecond {
+					if time.Since(lastUpdate) < 300*time.Millisecond {
 						continue
 					}
 					speed := progress.Update(current)
@@ -929,7 +929,7 @@ func downloadFile(ctx context.Context, rawURL, path, proxy string) error {
 	return nil
 }
 
-func selfUpdateGeo(ctx context.Context, paths appPaths, cfg GeoConfig, autoYes bool) error {
+func selfUpdateGeo(ctx context.Context, paths appPaths, cfg *GeoConfig, autoYes bool) error {
 	if cfg.DBAPIURL == "" {
 		return fmt.Errorf("geo config missing db_api_url")
 	}
@@ -1303,13 +1303,13 @@ func ipCheckArgSpec() argSpec {
 		"-v": argBool, "--verbose": argBool,
 		"-ns": argBool, "--no_save": argBool,
 		"--dry_run": argBool,
-		"-4": argBool, "--only_v4": argBool,
+		"-4":        argBool, "--only_v4": argBool,
 		"-6": argBool, "--only_v6": argBool,
 		"-cs": argSingle, "--cr_size": argSingle,
 		"-rs": argSingle, "--resolve_thread_num": argSingle,
 		"-df": argBool, "--disable_file_check": argBool,
 		"--pure_mode": argBool,
-		"--version": argBool,
+		"--version":   argBool,
 	}
 }
 
@@ -1382,7 +1382,7 @@ func cfgArgSpec() argSpec {
 	}
 }
 
-func checkGeoUpdate(ctx context.Context, paths appPaths, geoCfg GeoConfig, updateChan chan<- string) {
+func checkGeoUpdate(ctx context.Context, paths appPaths, geoCfg *GeoConfig, updateChan chan<- string) {
 	if geoCfg.DBAPIURL == "" {
 		return
 	}

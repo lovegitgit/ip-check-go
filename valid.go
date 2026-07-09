@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-func runValidTest(ctx context.Context, infos []IPInfo, cfg Config, ctrl *signalController) []IPInfo {
+func runValidTest(ctx context.Context, infos []IPInfo, cfg *Config, ctrl *signalController) []IPInfo {
 	if !cfg.Valid.Enabled {
 		consolePrint("跳过可用性测试")
 		return infos
@@ -83,7 +83,7 @@ func runValidTest(ctx context.Context, infos []IPInfo, cfg Config, ctrl *signalC
 	return passed
 }
 
-func validSingle(ctx context.Context, info IPInfo, cfg Config) (IPInfo, bool) {
+func validSingle(ctx context.Context, info IPInfo, cfg *Config) (IPInfo, bool) {
 	traceURL := fmt.Sprintf("https://%s%s", cfg.Valid.HostName, cfg.Valid.Path)
 	ua := chooseUserAgent(cfg.Valid.UserAgent)
 	resp, err := retryRequest(ctx, cfg.Valid.MaxRetry, cfg.Valid.RetryFactor, func() (*http.Response, error) {
@@ -193,7 +193,7 @@ func parseTraceBody(body []byte, checkKey, hostName string) (ok bool, loc string
 	return ok, loc, colo
 }
 
-func checkColoValid(colo string, cfg Config) bool {
+func checkColoValid(colo string, cfg *Config) bool {
 	if colo == "" {
 		return len(cfg.Valid.PreferColo) == 0
 	}

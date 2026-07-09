@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-func defaultConfig() Config {
-	cfg := Config{
+func defaultConfig() *Config {
+	cfg := &Config{
 		IPPort:          443,
 		CIDRSampleIPNum: 16,
 	}
@@ -49,7 +49,7 @@ func defaultConfig() Config {
 	return cfg
 }
 
-func loadConfig(path string) (Config, error) {
+func loadConfig(path string) (*Config, error) {
 	cfg := defaultConfig()
 	sections, err := parseINIFile(path)
 	if err != nil {
@@ -107,15 +107,15 @@ func loadConfig(path string) (Config, error) {
 	return cfg, nil
 }
 
-func defaultGeoConfigValue() GeoConfig {
-	return GeoConfig{
-		DBAPIURL: "https://api.github.com/repos/P3TERX/GeoLite.mmdb/releases/latest",
-		DBASNURL: "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb",
+func defaultGeoConfigValue() *GeoConfig {
+	return &GeoConfig{
+		DBAPIURL:  "https://api.github.com/repos/P3TERX/GeoLite.mmdb/releases/latest",
+		DBASNURL:  "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb",
 		DBCityURL: "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb",
 	}
 }
 
-func loadGeoConfig(path string) (GeoConfig, error) {
+func loadGeoConfig(path string) (*GeoConfig, error) {
 	cfg := defaultGeoConfigValue()
 	sections, err := parseINIFile(path)
 	if err != nil {

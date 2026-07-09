@@ -19,27 +19,27 @@ var defaultIPCheckConfig string
 var defaultGeoConfig string
 
 type appPaths struct {
-	baseDir       string
-	ipCheckConfig string
+	baseDir         string
+	ipCheckConfig   string
 	ipCheckConfigEx string
-	geoConfig     string
-	geoConfigEx   string
-	geoVersion    string
-	geoCityDB     string
-	geoASNDB      string
+	geoConfig       string
+	geoConfigEx     string
+	geoVersion      string
+	geoCityDB       string
+	geoASNDB        string
 }
 
 func newAppPaths() appPaths {
 	baseDir := appBaseDir()
 	return appPaths{
-		baseDir:       baseDir,
-		ipCheckConfig: filepath.Join(baseDir, "config.ini"),
+		baseDir:         baseDir,
+		ipCheckConfig:   filepath.Join(baseDir, "config.ini"),
 		ipCheckConfigEx: filepath.Join(baseDir, "config-ex.ini"),
-		geoConfig:     filepath.Join(baseDir, "geo.ini"),
-		geoConfigEx:   filepath.Join(baseDir, "geo-ex.ini"),
-		geoVersion:    filepath.Join(baseDir, ".geo_version"),
-		geoCityDB:     filepath.Join(baseDir, geoCityDBName),
-		geoASNDB:      filepath.Join(baseDir, geoASNDBName),
+		geoConfig:       filepath.Join(baseDir, "geo.ini"),
+		geoConfigEx:     filepath.Join(baseDir, "geo-ex.ini"),
+		geoVersion:      filepath.Join(baseDir, ".geo_version"),
+		geoCityDB:       filepath.Join(baseDir, geoCityDBName),
+		geoASNDB:        filepath.Join(baseDir, geoASNDBName),
 	}
 }
 

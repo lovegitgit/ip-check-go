@@ -18,7 +18,7 @@ type parseMetrics struct {
 	TotalSeconds   float64
 }
 
-func parseSources(ctx context.Context, cfg Config, geoSvc *geoService, enableGeo bool) ([]IPInfo, parseMetrics, error) {
+func parseSources(ctx context.Context, cfg *Config, geoSvc *geoService, enableGeo bool) ([]IPInfo, parseMetrics, error) {
 	startTotal := time.Now()
 	var raw []string
 	for _, src := range cfg.Runtime.IPSources {
@@ -81,7 +81,7 @@ func parseSources(ctx context.Context, cfg Config, geoSvc *geoService, enableGeo
 	}, nil
 }
 
-func parseIPExpr(arg string, cfg Config) []IPInfo {
+func parseIPExpr(arg string, cfg *Config) []IPInfo {
 	if ips := parseBareIP(arg, cfg); len(ips) > 0 {
 		return ips
 	}
@@ -94,7 +94,7 @@ func parseIPExpr(arg string, cfg Config) []IPInfo {
 	return nil
 }
 
-func parseBareIP(arg string, cfg Config) []IPInfo {
+func parseBareIP(arg string, cfg *Config) []IPInfo {
 	ip := strings.TrimPrefix(strings.TrimSuffix(arg, "]"), "[")
 	if !isIPAddress(ip) || !addrAllowedByWhiteBlock(ip, cfg) || !addrAllowedByFamily(ip, cfg) {
 		return nil
@@ -102,7 +102,7 @@ func parseBareIP(arg string, cfg Config) []IPInfo {
 	return []IPInfo{newIPInfo(ip, cfg.IPPort)}
 }
 
-func parseCIDR(arg string, cfg Config) []IPInfo {
+func parseCIDR(arg string, cfg *Config) []IPInfo {
 	prefix, err := netip.ParsePrefix(arg)
 	if err != nil || !addrAllowedByFamily(prefix.Addr().String(), cfg) {
 		return nil
@@ -121,7 +121,7 @@ func parseCIDR(arg string, cfg Config) []IPInfo {
 	return out
 }
 
-func parseIPPort(arg string, cfg Config) []IPInfo {
+func parseIPPort(arg string, cfg *Config) []IPInfo {
 	host, portStr, err := net.SplitHostPort(arg)
 	if err != nil {
 		if strings.Count(arg, ":") == 1 && !strings.Contains(arg, "]") {
@@ -139,7 +139,7 @@ func parseIPPort(arg string, cfg Config) []IPInfo {
 	return []IPInfo{newIPInfo(host, port)}
 }
 
-func resolveHostnames(ctx context.Context, hosts []string, cfg Config) ([]IPInfo, error) {
+func resolveHostnames(ctx context.Context, hosts []string, cfg *Config) ([]IPInfo, error) {
 	if len(hosts) == 0 {
 		return nil, nil
 	}

@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func runRTTTest(ctx context.Context, infos []IPInfo, cfg Config, ctrl *signalController) []IPInfo {
+func runRTTTest(ctx context.Context, infos []IPInfo, cfg *Config, ctrl *signalController) []IPInfo {
 	if !cfg.RTT.Enabled {
 		consolePrint("跳过RTT测试")
 		return infos
@@ -80,7 +80,7 @@ func runRTTTest(ctx context.Context, infos []IPInfo, cfg Config, ctrl *signalCon
 	return passed
 }
 
-func tcpPing(ctx context.Context, info IPInfo, cfg Config) IPInfo {
+func tcpPing(ctx context.Context, info IPInfo, cfg *Config) IPInfo {
 	var (
 		sumRTT      float64
 		packetsSent int

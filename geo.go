@@ -14,8 +14,8 @@ import (
 )
 
 type geoService struct {
-	cityReader *geoip2.Reader
-	asnReader  *geoip2.Reader
+	cityReader   *geoip2.Reader
+	asnReader    *geoip2.Reader
 	locAvailable bool
 	asnAvailable bool
 }

@@ -48,7 +48,7 @@ func ipVersion(s string) int {
 	return 6
 }
 
-func addrAllowedByFamily(s string, cfg Config) bool {
+func addrAllowedByFamily(s string, cfg *Config) bool {
 	if cfg.Runtime.OnlyV4 == cfg.Runtime.OnlyV6 {
 		return true
 	}
@@ -59,7 +59,7 @@ func addrAllowedByFamily(s string, cfg Config) bool {
 	return version == 6
 }
 
-func addrAllowedByWhiteBlock(s string, cfg Config) bool {
+func addrAllowedByWhiteBlock(s string, cfg *Config) bool {
 	if len(cfg.Runtime.WhiteList) > 0 {
 		for _, prefix := range cfg.Runtime.WhiteList {
 			if strings.HasPrefix(s, prefix) {
@@ -76,7 +76,7 @@ func addrAllowedByWhiteBlock(s string, cfg Config) bool {
 	return true
 }
 
-func portAllowed(port int, cfg Config) bool {
+func portAllowed(port int, cfg *Config) bool {
 	if port <= 0 || port > 65535 {
 		return false
 	}

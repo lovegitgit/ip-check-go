@@ -25,18 +25,18 @@ type Config struct {
 
 	Runtime struct {
 		IPSources        []string
-		OutputFile        string
-		Verbose           bool
-		ResolveThreadNum  int
-		WhiteList         []string
-		BlockList         []string
-		PreferLocs        []string
-		PreferPorts       []int
-		PreferOrgs        []string
-		BlockOrgs         []string
-		DryRun            bool
-		OnlyV4            bool
-		OnlyV6            bool
+		OutputFile       string
+		Verbose          bool
+		ResolveThreadNum int
+		WhiteList        []string
+		BlockList        []string
+		PreferLocs       []string
+		PreferPorts      []int
+		PreferOrgs       []string
+		BlockOrgs        []string
+		DryRun           bool
+		OnlyV4           bool
+		OnlyV6           bool
 	}
 
 	Valid struct {
@@ -89,9 +89,9 @@ type Config struct {
 }
 
 type GeoConfig struct {
-	Proxy    string
-	DBAPIURL string
-	DBASNURL string
+	Proxy     string
+	DBAPIURL  string
+	DBASNURL  string
 	DBCityURL string
 }
 

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func runSpeedTest(ctx context.Context, infos []IPInfo, cfg Config, ctrl *signalController) []IPInfo {
+func runSpeedTest(ctx context.Context, infos []IPInfo, cfg *Config, ctrl *signalController) []IPInfo {
 	if !cfg.Speed.Enabled {
 		consolePrint("跳过速度测试")
 		return infos
@@ -48,7 +48,7 @@ func runSpeedTest(ctx context.Context, infos []IPInfo, cfg Config, ctrl *signalC
 	return passed
 }
 
-func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
+func speedSingle(ctx context.Context, info IPInfo, cfg *Config) IPInfo {
 	timeout := durationSeconds(cfg.Speed.Timeout)
 	reqCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -172,7 +172,7 @@ func speedSingle(ctx context.Context, info IPInfo, cfg Config) IPInfo {
 	}
 }
 
-func finalizeSpeed(info IPInfo, interrupted bool, hasError bool, cfg Config) IPInfo {
+func finalizeSpeed(info IPInfo, interrupted bool, hasError bool, cfg *Config) IPInfo {
 	if info.MaxSpeed == -1 {
 		info.MaxSpeed = 0
 	}
@@ -189,4 +189,3 @@ func finalizeSpeed(info IPInfo, interrupted bool, hasError bool, cfg Config) IPI
 	}
 	return info
 }
-

@@ -25,12 +25,10 @@ func (b *transportBody) Close() error {
 	return err
 }
 
-
-
 func pinnedTransport(targetIP string, port int, serverName string, timeout time.Duration) *http.Transport {
 	dialer := &net.Dialer{Timeout: timeout}
 	return &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
+		Proxy: http.ProxyFromEnvironment,
 		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
 			return dialer.DialContext(ctx, network, net.JoinHostPort(targetIP, fmt.Sprint(port)))
 		},
@@ -38,7 +36,7 @@ func pinnedTransport(targetIP string, port int, serverName string, timeout time.
 			ServerName:         serverName,
 			InsecureSkipVerify: true,
 		},
-		DisableKeepAlives:    true,
+		DisableKeepAlives:     true,
 		TLSHandshakeTimeout:   timeout,
 		DisableCompression:    true,
 		ResponseHeaderTimeout: timeout,

@@ -56,34 +56,29 @@ func (g *geoService) fill(ctx context.Context, infos []IPInfo) []IPInfo {
 		consolePrint(fmt.Sprintf("%s 数据库异常, 无法获取IP ASN/ORG信息, 请执行igeo-dl 重新下载!", geoASNDBName))
 	}
 	out := make([]IPInfo, len(infos))
-	type job struct {
-		idx  int
-		info IPInfo
-	}
 	workerCount := minInt(max(1, runtime.GOMAXPROCS(0)), len(infos))
-	jobs := make(chan job)
+	chunkSize := (len(infos) + workerCount - 1) / workerCount
 	var wg sync.WaitGroup
 	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for item := range jobs {
-				out[item.idx] = g.fillOne(item.info)
-			}
-		}()
-	}
-enqueueLoop:
-	for idx, info := range infos {
-		if ctx.Err() != nil {
+		start := i * chunkSize
+		end := start + chunkSize
+		if end > len(infos) {
+			end = len(infos)
+		}
+		if start >= end {
 			break
 		}
-		select {
-		case <-ctx.Done():
-			break enqueueLoop
-		case jobs <- job{idx: idx, info: info}:
-		}
+		wg.Add(1)
+		go func(start, end int) {
+			defer wg.Done()
+			for j := start; j < end; j++ {
+				if ctx.Err() != nil {
+					return
+				}
+				out[j] = g.fillOne(infos[j])
+			}
+		}(start, end)
 	}
-	close(jobs)
 	wg.Wait()
 	if ctx.Err() != nil {
 		var partial []IPInfo

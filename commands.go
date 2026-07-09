@@ -1156,14 +1156,14 @@ func parseContentRange(v string) (int64, int64, int64, bool) {
 func humanSize(v int64) string {
 	const unit = 1024
 	if v < unit {
-		return fmt.Sprintf("%dB", v)
+		return fmt.Sprintf("%d B", v)
 	}
 	div, exp := int64(unit), 0
 	for n := v / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f%ciB", float64(v)/float64(div), "KMGTPE"[exp])
+	return fmt.Sprintf("%.1f %ciB", float64(v)/float64(div), "KMGTPE"[exp])
 }
 
 func hasSuffixAny(s, suffix string) bool {

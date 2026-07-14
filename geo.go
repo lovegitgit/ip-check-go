@@ -46,7 +46,7 @@ func (g *geoService) Close() {
 }
 
 func (g *geoService) fill(ctx context.Context, infos []IPInfo) []IPInfo {
-	if g == nil {
+	if g == nil || len(infos) == 0 {
 		return infos
 	}
 	if g.cityReader == nil {
